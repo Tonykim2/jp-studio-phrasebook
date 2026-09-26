@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>일본 출장 · OST 녹음 표현집</title>
+<style>
+  :root {
+    --bg: #14161c;
+    --card: #1e2129;
+    --card-border: #2c303a;
+    --accent: #e0a458;
+    --accent-dim: #7a5a30;
+    --text: #ececec;
+    --text-dim: #9a9fab;
+    --text-faint: #6b7080;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    padding-bottom: 90px;
+  }
+  header {
+    padding: 20px 16px 12px;
+    position: sticky;
+    top: 0;
+    background: var(--bg);
+    z-index: 10;
+    border-bottom: 1px solid var(--card-border);
+  }
+  h1 {
+    font-size: 18px;
+    margin: 0 0 2px;
+    font-weight: 700;
+  }
+  .sub {
+    font-size: 12px;
+    color: var(--text-dim);
+    margin-bottom: 12px;
+  }
+  .search {
+    width: 100%;
+    padding: 10px 14px;
+    border-radius: 10px;
+    border: 1px solid var(--card-border);
+    background: var(--card);
+    color: var(--text);
+    font-size: 14px;
+    outline: none;
+  }
+  .tabs {
+    display: flex;
+    gap: 6px;
+    margin-top: 12px;
+    overflow-x: auto;
+  }
+  .tab {
+    flex: none;
+    padding: 8px 14px;
+    border-radius: 20px;
+    background: var(--card);
+    border: 1px solid var(--card-border);
+    color: var(--text-dim);
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .tab.active {
+    background: var(--accent);
+    color: #14161c;
+    border-color: var(--accent);
+  }
+  .controls {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 8px;
+    padding: 10px 16px 0;
+    font-size: 12px;
+    color: var(--text-dim);
+  }
+  .slow-toggle {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+  }
+  .slow-toggle input { accent-color: var(--accent); width: 16px; height: 16px; }
+  main {
+    padding: 12px 16px 20px;
+  }
+  .card {
+    background: var(--card);
+    border: 1px solid var(--card-border);
+    border-radius: 14px;
+    padding: 14px 14px 12px;
+    margin-bottom: 10px;
+  }
+  .card .jp {
+    font-size: 19px;
+    font-weight: 600;
+    margin-bottom: 4px;
+  }
+  .card .reading {
+    font-size: 12.5px;
+    color: var(--text-faint);
+    margin-bottom: 6px;
+  }
+  .card .ko {
+    font-size: 14px;
+    color: var(--text-dim);
+  }
+  .card-footer {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: 8px;
+  }
+  .play-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: var(--accent-dim);
+    color: var(--accent);
+    border: none;
+    border-radius: 20px;
+    padding: 7px 14px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .play-btn:active { opacity: 0.7; }
+  .play-btn.playing { background: var(--accent); color: #14161c; }
+  .kanji-card {
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+  }
+  .kanji-card .kanji-glyph {
+    font-size: 28px;
+    font-weight: 700;
+    min-width: 44px;
+  }
+  .kanji-meta { flex: 1; }
+  .kanji-meta .reading { margin: 0 0 2px; }
+  .kanji-meta .ko { font-size: 14px; }
+  .empty {
+    text-align: center;
+    color: var(--text-faint);
+    padding: 40px 20px;
+    font-size: 13px;
+  }
+  footer {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    text-align: center;
+    font-size: 11px;
+    color: var(--text-faint);
+    padding: 10px;
+    background: linear-gradient(transparent, var(--bg) 40%);
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>🎙️ 일본 출장 · OST 녹음 표현집</h1>
+  <div class="sub">회의 · 사무 · 녹음 스튜디오 · 한자</div>
+  <input class="search" id="search" type="text" placeholder="검색 (한글/일본어)">
+  <div class="tabs" id="tabs"></div>
+</header>
+
+<div class="controls">
+  <label class="slow-toggle">
+    <input type="checkbox" id="slowToggle">
+    느리게 재생
+  </label>
+</div>
+
+<main id="list"></main>
+
+<footer>문구를 눌러 재생 버튼으로 발음을 들어보세요</footer>
+
+<script>
+const DATA = {
+  회의: [
+    {jp:"はじめまして。〇〇と申します。", r:"하지메마시테. ○○토 모-시마스.", ko:"처음 뵙겠습니다. 저는 ○○입니다."},
+    {jp:"本日はよろしくお願いいたします。", r:"혼지츠와 요로시쿠 오네가이 이타시마스.", ko:"오늘 잘 부탁드립니다."},
+    {jp:"お忙しい中、お時間をいただきありがとうございます。", r:"오이소가시- 나카, 오지캉오 이타다키 아리가토- 고자이마스.", ko:"바쁘신 중에 시간 내주셔서 감사합니다."},
+    {jp:"スケジュールを確認させてください。", r:"스케쥬-루오 카쿠닌 사세테 쿠다사이.", ko:"일정을 확인하겠습니다."},
+    {jp:"何時に始まりますか？", r:"난지니 하지마리마스카?", ko:"몇 시에 시작하나요?"},
+    {jp:"資料を共有していただけますか？", r:"시료-오 쿄-유- 시테 이타다케마스카?", ko:"자료를 공유해 주시겠어요?"},
+    {jp:"予定より少し遅れています。", r:"요테- 요리 스코시 오쿠레테 이마스.", ko:"예정보다 조금 늦어지고 있습니다."},
+    {jp:"休憩を取りましょうか。", r:"큐-케-오 토리마쇼-카.", ko:"잠시 쉴까요?"},
+    {jp:"質問があります。", r:"시츠몬가 아리마스.", ko:"질문이 있습니다."},
+    {jp:"お疲れ様でした。ありがとうございました。", r:"오츠카레사마 데시타. 아리가토- 고자이마시타.", ko:"수고하셨습니다. 감사했습니다."}
+  ],
+  사무: [
+    {jp:"お手洗いはどこですか？", r:"오테아라이와 도코데스카?", ko:"화장실이 어디인가요?"},
+    {jp:"Wi-Fiのパスワードを教えてください。", r:"와이파이노 파스와-도오 오시에테 쿠다사이.", ko:"와이파이 비밀번호를 알려주세요."},
+    {jp:"名刺交換をお願いします。", r:"메-시 코-칸오 오네가이시마스.", ko:"명함을 교환하시죠."},
+    {jp:"コピーを取ってもいいですか？", r:"코피-오 톳테모 이이데스카?", ko:"복사해도 될까요?"},
+    {jp:"領収書をいただけますか？", r:"료-슈-쇼오 이타다케마스카?", ko:"영수증 받을 수 있을까요?"},
+    {jp:"タクシーを呼んでいただけますか？", r:"타쿠시-오 욘데 이타다케마스카?", ko:"택시를 불러주시겠어요?"},
+    {jp:"両替できますか？", r:"료-가에 데키마스카?", ko:"환전할 수 있나요?"},
+    {jp:"明日もよろしくお願いします。", r:"아시타모 요로시쿠 오네가이시마스.", ko:"내일도 잘 부탁드립니다."}
+  ],
+  스튜디오: [
+    {jp:"テイク1、お願いします。", r:"테이쿠 이치, 오네가이시마스.", ko:"테이크 1, 부탁드립니다."},
+    {jp:"もう一度お願いします。", r:"모- 이치도 오네가이시마스.", ko:"한 번 더 부탁드립니다."},
+    {jp:"もっと感情を込めてください。", r:"못토 칸죠-오 코메테 쿠다사이.", ko:"좀 더 감정을 담아주세요."},
+    {jp:"少し早く歌ってください。", r:"스코시 하야쿠 우탓테 쿠다사이.", ko:"조금 빠르게 불러주세요."},
+    {jp:"少しゆっくり歌ってください。", r:"스코시 육쿠리 우탓테 쿠다사이.", ko:"조금 천천히 불러주세요."},
+    {jp:"音量を上げてください。", r:"온료-오 아게테 쿠다사이.", ko:"볼륨을 올려주세요."},
+    {jp:"音量を下げてください。", r:"온료-오 사게테 쿠다사이.", ko:"볼륨을 낮춰주세요."},
+    {jp:"いいテイクでした！", r:"이이 테이쿠 데시타!", ko:"좋은 테이크였어요!"},
+    {jp:"録音を開始します。", r:"로쿠온오 카이시시마스.", ko:"녹음을 시작하겠습니다."},
+    {jp:"ヘッドホンの音量は大丈夫ですか？", r:"헷도혼노 온료-와 다이죠-부데스카?", ko:"헤드폰 볼륨은 괜찮으신가요?"},
+    {jp:"ここからもう一度お願いします。", r:"코코카라 모- 이치도 오네가이시마스.", ko:"여기서부터 다시 한 번 부탁드립니다."},
+    {jp:"キーが少し合っていません。", r:"키-가 스코시 앗테 이마센.", ko:"키가 조금 안 맞아요."},
+    {jp:"ピッチを確認してください。", r:"핏치오 카쿠닌시테 쿠다사이.", ko:"피치를 확인해 주세요."},
+    {jp:"歌詞カードをご覧ください。", r:"카시 카-도오 고란 쿠다사이.", ko:"가사 카드를 봐주세요."},
+    {jp:"発音を直してもらえますか？", r:"하츠온오 나오시테 모라에마스카?", ko:"발음을 고쳐주실 수 있나요?"},
+    {jp:"ブレスの音が入っています。", r:"부레스노 오토가 하잇테 이마스.", ko:"숨소리가 들어갔어요."},
+    {jp:"ミックスを聞かせてください。", r:"믹쿠스오 키카세테 쿠다사이.", ko:"믹스를 들려주세요."},
+    {jp:"お疲れ様でした、いい仕上がりです。", r:"오츠카레사마 데시타, 이이 시아가리데스.", ko:"수고하셨습니다, 좋은 결과물이에요."}
+  ],
+  한자: [
+    {jp:"録音", r:"ろくおん · 로쿠온", ko:"녹음"},
+    {jp:"歌詞", r:"かし · 카시", ko:"가사"},
+    {jp:"音量", r:"おんりょう · 온료-", ko:"음량 / 볼륨"},
+    {jp:"感情", r:"かんじょう · 칸죠-", ko:"감정"},
+    {jp:"確認", r:"かくにん · 카쿠닌", ko:"확인"},
+    {jp:"資料", r:"しりょう · 시료-", ko:"자료"},
+    {jp:"予定", r:"よてい · 요테-", ko:"예정"},
+    {jp:"休憩", r:"きゅうけい · 큐-케-", ko:"휴식"},
+    {jp:"名刺", r:"めいし · 메-시", ko:"명함"},
+    {jp:"領収書", r:"りょうしゅうしょ · 료-슈-쇼", ko:"영수증"},
+    {jp:"発音", r:"はつおん · 하츠온", ko:"발음"},
+    {jp:"仕上がり", r:"しあがり · 시아가리", ko:"마무리 / 완성"},
+    {jp:"質問", r:"しつもん · 시츠몬", ko:"질문"},
+    {jp:"共有", r:"きょうゆう · 쿄-유-", ko:"공유"},
+    {jp:"両替", r:"りょうがえ · 료-가에", ko:"환전"}
+  ]
+};
+
+const tabsEl = document.getElementById('tabs');
+const listEl = document.getElementById('list');
+const searchEl = document.getElementById('search');
+const slowToggle = document.getElementById('slowToggle');
+const categories = Object.keys(DATA);
+let activeTab = categories[0];
+let jaVoice = null;
+
+function pickVoice() {
+  const voices = speechSynthesis.getVoices();
+  jaVoice = voices.find(v => v.lang === 'ja-JP') || voices.find(v => v.lang && v.lang.startsWith('ja')) || null;
+}
+speechSynthesis.onvoiceschanged = pickVoice;
+pickVoice();
+
+function speak(text, btn) {
+  speechSynthesis.cancel();
+  const utter = new SpeechSynthesisUtterance(text);
+  utter.lang = 'ja-JP';
+  if (jaVoice) utter.voice = jaVoice;
+  utter.rate = slowToggle.checked ? 0.6 : 1.0;
+  if (btn) {
+    btn.classList.add('playing');
+    utter.onend = () => btn.classList.remove('playing');
+  }
+  speechSynthesis.speak(utter);
+}
+
+function renderTabs() {
+  tabsEl.innerHTML = '';
+  categories.forEach(cat => {
+    const btn = document.createElement('div');
+    btn.className = 'tab' + (cat === activeTab ? ' active' : '');
+    btn.textContent = cat;
+    btn.onclick = () => { activeTab = cat; searchEl.value=''; render(); };
+    tabsEl.appendChild(btn);
+  });
+}
+
+function render() {
+  renderTabs();
+  const q = searchEl.value.trim().toLowerCase();
+  const items = DATA[activeTab].filter(item =>
+    !q || item.jp.toLowerCase().includes(q) || item.ko.toLowerCase().includes(q) || item.r.toLowerCase().includes(q)
+  );
+  listEl.innerHTML = '';
+  if (!items.length) {
+    listEl.innerHTML = '<div class="empty">검색 결과가 없어요</div>';
+    return;
+  }
+  items.forEach(item => {
+    const card = document.createElement('div');
+    card.className = 'card' + (activeTab === '한자' ? ' kanji-card' : '');
+    if (activeTab === '한자') {
+      card.innerHTML = `
+        <div class="kanji-glyph">${item.jp}</div>
+        <div class="kanji-meta">
+          <div class="reading">${item.r}</div>
+          <div class="ko">${item.ko}</div>
+        </div>
+      `;
+      const btn = document.createElement('button');
+      btn.className = 'play-btn';
+      btn.innerHTML = '🔊';
+      btn.onclick = () => speak(item.jp, btn);
+      card.appendChild(btn);
+    } else {
+      card.innerHTML = `
+        <div class="jp">${item.jp}</div>
+        <div class="reading">${item.r}</div>
+        <div class="ko">${item.ko}</div>
+        <div class="card-footer"></div>
+      `;
+      const btn = document.createElement('button');
+      btn.className = 'play-btn';
+      btn.innerHTML = '🔊 발음 듣기';
+      btn.onclick = () => speak(item.jp, btn);
+      card.querySelector('.card-footer').appendChild(btn);
+    }
+    listEl.appendChild(card);
+  });
+}
+
+searchEl.addEventListener('input', render);
+render();
+</script>
+
+</body>
+</html>
