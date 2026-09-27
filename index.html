@@ -164,6 +164,93 @@
     padding: 10px;
     background: linear-gradient(transparent, var(--bg) 40%);
   }
+  .mode-tabs {
+    display: flex;
+    gap: 8px;
+    margin-top: 12px;
+  }
+  .mode-tab {
+    flex: 1;
+    text-align: center;
+    padding: 10px;
+    border-radius: 10px;
+    background: var(--card);
+    border: 1px solid var(--card-border);
+    color: var(--text-dim);
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+  }
+  .mode-tab.active {
+    background: var(--accent);
+    color: #14161c;
+    border-color: var(--accent);
+  }
+  .card-footer { gap: 8px; }
+  .mic-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: var(--card);
+    color: var(--text-dim);
+    border: 1px solid var(--card-border);
+    border-radius: 20px;
+    padding: 7px 14px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .mic-btn.listening { background: #c0392b33; color: #e74c3c; border-color: #e74c3c; }
+  .mic-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+  .pron-feedback {
+    display: none;
+    margin-top: 8px;
+    font-size: 12.5px;
+    padding: 8px 10px;
+    border-radius: 8px;
+    line-height: 1.4;
+  }
+  .pron-feedback.show { display: block; }
+  .pron-feedback.good { background: #1f3d2a; color: #7cd992; }
+  .pron-feedback.mid { background: #3d371f; color: #d9c37c; }
+  .pron-feedback.bad { background: #3d1f22; color: #e08a8a; }
+  .quiz-wrap { padding: 20px 16px; }
+  .quiz-progress { font-size: 12px; color: var(--text-dim); margin-bottom: 10px; text-align: center; }
+  .quiz-question {
+    background: var(--card);
+    border: 1px solid var(--card-border);
+    border-radius: 16px;
+    padding: 28px 18px;
+    text-align: center;
+    margin-bottom: 16px;
+  }
+  .quiz-question .jp { font-size: 22px; font-weight: 700; margin-bottom: 6px; }
+  .quiz-question .reading { font-size: 13px; color: var(--text-faint); }
+  .quiz-options { display: flex; flex-direction: column; gap: 10px; }
+  .quiz-option {
+    padding: 14px;
+    border-radius: 12px;
+    background: var(--card);
+    border: 1px solid var(--card-border);
+    color: var(--text);
+    font-size: 14px;
+    text-align: left;
+    cursor: pointer;
+  }
+  .quiz-option.correct { background: #1f3d2a; border-color: #3ba55d; color: #7cd992; }
+  .quiz-option.wrong { background: #3d1f22; border-color: #e74c3c; color: #e08a8a; }
+  .quiz-option:disabled { cursor: default; }
+  .quiz-next {
+    display: block;
+    margin: 18px auto 0;
+    padding: 10px 24px;
+    border-radius: 20px;
+    background: var(--accent);
+    color: #14161c;
+    border: none;
+    font-weight: 700;
+    cursor: pointer;
+  }
 </style>
 </head>
 <body>
@@ -171,11 +258,17 @@
 <header>
   <h1>🎙️ 일본 출장 · OST 녹음 표현집</h1>
   <div class="sub">회의 · 사무 · 녹음 스튜디오 · 한자</div>
-  <input class="search" id="search" type="text" placeholder="검색 (한글/일본어)">
-  <div class="tabs" id="tabs"></div>
+  <div class="mode-tabs" id="modeTabs">
+    <div class="mode-tab active" data-mode="study">📖 학습</div>
+    <div class="mode-tab" data-mode="quiz">🎮 퀴즈</div>
+  </div>
+  <div id="studyHeader">
+    <input class="search" id="search" type="text" placeholder="검색 (한글/일본어)">
+    <div class="tabs" id="tabs"></div>
+  </div>
 </header>
 
-<div class="controls">
+<div class="controls" id="slowControlsWrap">
   <label class="slow-toggle">
     <input type="checkbox" id="slowToggle">
     느리게 재생
@@ -183,8 +276,9 @@
 </div>
 
 <main id="list"></main>
+<div class="quiz-wrap" id="quizScreen" style="display:none"></div>
 
-<footer>문구를 눌러 재생 버튼으로 발음을 들어보세요</footer>
+<footer id="footerText">문구를 눌러 재생 버튼으로 발음을 들어보세요</footer>
 
 <script>
 const DATA = {
@@ -287,6 +381,17 @@ const categories = Object.keys(DATA);
 let activeTab = categories[0];
 let jaVoice = null;
 
+const modeTabsEl = document.getElementById('modeTabs');
+const studyHeaderEl = document.getElementById('studyHeader');
+const slowControlsWrapEl = document.getElementById('slowControlsWrap');
+const quizScreenEl = document.getElementById('quizScreen');
+const footerTextEl = document.getElementById('footerText');
+const SpeechRecognitionCtor = window.SpeechRecognition || window.webkitSpeechRecognition;
+const ALL_PHRASES = categories.flatMap(cat => DATA[cat].map(item => ({...item, cat})));
+const WRONG_KEY = 'jpPhrasebookWrongCounts';
+let quizScore = { correct: 0, total: 0 };
+let currentQuestion = null;
+
 function pickVoice() {
   const voices = speechSynthesis.getVoices();
   jaVoice = voices.find(v => v.lang === 'ja-JP') || voices.find(v => v.lang && v.lang.startsWith('ja')) || null;
@@ -332,6 +437,8 @@ function render() {
   items.forEach(item => {
     const card = document.createElement('div');
     card.className = 'card' + (activeTab === '한자' ? ' kanji-card' : '');
+    const feedbackEl = document.createElement('div');
+    feedbackEl.className = 'pron-feedback';
     if (activeTab === '한자') {
       card.innerHTML = `
         <div class="kanji-glyph">${item.jp}</div>
@@ -340,11 +447,22 @@ function render() {
           <div class="ko">${item.ko}</div>
         </div>
       `;
+      const btnWrap = document.createElement('div');
+      btnWrap.style.display = 'flex';
+      btnWrap.style.flexDirection = 'column';
+      btnWrap.style.gap = '6px';
       const btn = document.createElement('button');
       btn.className = 'play-btn';
       btn.innerHTML = '🔊';
       btn.onclick = () => speak(item.jp, btn);
-      card.appendChild(btn);
+      const micBtn = document.createElement('button');
+      micBtn.className = 'mic-btn';
+      micBtn.innerHTML = '🎤';
+      micBtn.disabled = !SpeechRecognitionCtor;
+      micBtn.onclick = () => startPronunciationCheck(item, micBtn, feedbackEl);
+      btnWrap.appendChild(btn);
+      btnWrap.appendChild(micBtn);
+      card.appendChild(btnWrap);
     } else {
       card.innerHTML = `
         <div class="jp">${item.jp}</div>
@@ -352,15 +470,169 @@ function render() {
         <div class="ko">${item.ko}</div>
         <div class="card-footer"></div>
       `;
+      const footerEl = card.querySelector('.card-footer');
+      const micBtn = document.createElement('button');
+      micBtn.className = 'mic-btn';
+      micBtn.innerHTML = '🎤 말하기 연습';
+      micBtn.disabled = !SpeechRecognitionCtor;
+      micBtn.onclick = () => startPronunciationCheck(item, micBtn, feedbackEl);
       const btn = document.createElement('button');
       btn.className = 'play-btn';
       btn.innerHTML = '🔊 발음 듣기';
       btn.onclick = () => speak(item.jp, btn);
-      card.querySelector('.card-footer').appendChild(btn);
+      footerEl.appendChild(micBtn);
+      footerEl.appendChild(btn);
     }
+    card.appendChild(feedbackEl);
     listEl.appendChild(card);
   });
 }
+
+function normalizeJp(s) {
+  return s.replace(/[。、！？\s.,!?ー〜～]/g, '');
+}
+
+function levenshtein(a, b) {
+  const m = a.length, n = b.length;
+  const dp = Array.from({ length: m + 1 }, () => new Array(n + 1).fill(0));
+  for (let i = 0; i <= m; i++) dp[i][0] = i;
+  for (let j = 0; j <= n; j++) dp[0][j] = j;
+  for (let i = 1; i <= m; i++) {
+    for (let j = 1; j <= n; j++) {
+      dp[i][j] = a[i - 1] === b[j - 1] ? dp[i - 1][j - 1] : 1 + Math.min(dp[i - 1][j], dp[i][j - 1], dp[i - 1][j - 1]);
+    }
+  }
+  return dp[m][n];
+}
+
+function similarity(a, b) {
+  a = normalizeJp(a); b = normalizeJp(b);
+  if (!a.length && !b.length) return 1;
+  return 1 - levenshtein(a, b) / Math.max(a.length, b.length, 1);
+}
+
+function startPronunciationCheck(item, micBtn, feedbackEl) {
+  if (!SpeechRecognitionCtor) {
+    feedbackEl.className = 'pron-feedback show bad';
+    feedbackEl.textContent = '이 브라우저는 음성 인식을 지원하지 않아요 (Chrome/Safari 최신 버전 권장)';
+    return;
+  }
+  const rec = new SpeechRecognitionCtor();
+  rec.lang = 'ja-JP';
+  rec.interimResults = false;
+  rec.maxAlternatives = 1;
+  micBtn.classList.add('listening');
+  const originalLabel = micBtn.innerHTML;
+  micBtn.innerHTML = '🎙️ 듣는 중...';
+  feedbackEl.className = 'pron-feedback show mid';
+  feedbackEl.textContent = '말씀해주세요...';
+  rec.onresult = (e) => {
+    const heard = e.results[0][0].transcript;
+    const score = Math.round(similarity(item.jp, heard) * 100);
+    const cls = score >= 80 ? 'good' : score >= 50 ? 'mid' : 'bad';
+    feedbackEl.className = 'pron-feedback show ' + cls;
+    feedbackEl.innerHTML = `인식된 발음: "${heard}" — 일치도 ${score}%`;
+  };
+  rec.onerror = (e) => {
+    feedbackEl.className = 'pron-feedback show bad';
+    feedbackEl.textContent = '인식 실패(' + e.error + ') — 다시 시도해주세요';
+  };
+  rec.onend = () => {
+    micBtn.classList.remove('listening');
+    micBtn.innerHTML = originalLabel;
+  };
+  rec.start();
+}
+
+function getWrongCounts() {
+  try { return JSON.parse(localStorage.getItem(WRONG_KEY) || '{}'); } catch (e) { return {}; }
+}
+function saveWrongCounts(obj) {
+  localStorage.setItem(WRONG_KEY, JSON.stringify(obj));
+}
+
+function pickQuestion() {
+  const wrongCounts = getWrongCounts();
+  const weighted = [];
+  ALL_PHRASES.forEach(item => {
+    const w = 1 + (wrongCounts[item.jp] || 0) * 2;
+    for (let i = 0; i < w; i++) weighted.push(item);
+  });
+  return weighted[Math.floor(Math.random() * weighted.length)];
+}
+
+function pickOptions(correct) {
+  const pool = ALL_PHRASES.filter(p => p.ko !== correct.ko);
+  const wrongs = pool.slice().sort(() => Math.random() - 0.5).slice(0, 3);
+  return [correct, ...wrongs].sort(() => Math.random() - 0.5);
+}
+
+function startQuiz() {
+  currentQuestion = pickQuestion();
+  renderQuiz();
+}
+
+function renderQuiz() {
+  const q = currentQuestion;
+  const options = pickOptions(q);
+  quizScreenEl.innerHTML = `
+    <div class="quiz-progress">이번 세션 ${quizScore.correct} / ${quizScore.total} 정답</div>
+    <div class="quiz-question">
+      <div class="jp">${q.jp}</div>
+      <div class="reading">${q.r}</div>
+    </div>
+    <div class="quiz-options"></div>
+  `;
+  const optionsEl = quizScreenEl.querySelector('.quiz-options');
+  options.forEach(opt => {
+    const btn = document.createElement('button');
+    btn.className = 'quiz-option';
+    btn.textContent = opt.ko;
+    btn.onclick = () => answerQuiz(opt === q, btn, optionsEl, q);
+    optionsEl.appendChild(btn);
+  });
+}
+
+function answerQuiz(isCorrect, btn, optionsEl, q) {
+  optionsEl.querySelectorAll('.quiz-option').forEach(b => b.disabled = true);
+  const wrongCounts = getWrongCounts();
+  quizScore.total++;
+  if (isCorrect) {
+    quizScore.correct++;
+    btn.classList.add('correct');
+    if (wrongCounts[q.jp]) {
+      wrongCounts[q.jp] = Math.max(0, wrongCounts[q.jp] - 1);
+      saveWrongCounts(wrongCounts);
+    }
+  } else {
+    btn.classList.add('wrong');
+    wrongCounts[q.jp] = (wrongCounts[q.jp] || 0) + 1;
+    saveWrongCounts(wrongCounts);
+    optionsEl.querySelectorAll('.quiz-option').forEach(b => { if (b.textContent === q.ko) b.classList.add('correct'); });
+  }
+  const nextBtn = document.createElement('button');
+  nextBtn.className = 'quiz-next';
+  nextBtn.textContent = '다음 문제 →';
+  nextBtn.onclick = () => { currentQuestion = pickQuestion(); renderQuiz(); };
+  quizScreenEl.appendChild(nextBtn);
+}
+
+function setMode(mode) {
+  modeTabsEl.querySelectorAll('.mode-tab').forEach(b => b.classList.toggle('active', b.dataset.mode === mode));
+  const isStudy = mode === 'study';
+  studyHeaderEl.style.display = isStudy ? '' : 'none';
+  listEl.style.display = isStudy ? '' : 'none';
+  slowControlsWrapEl.style.display = isStudy ? '' : 'none';
+  quizScreenEl.style.display = isStudy ? 'none' : '';
+  footerTextEl.textContent = isStudy
+    ? '문구를 눌러 재생 버튼으로 발음을 들어보세요'
+    : '정답을 맞히면 다음 문제로 넘어가요 · 틀린 문제가 더 자주 나와요';
+  if (!isStudy) startQuiz();
+}
+
+modeTabsEl.querySelectorAll('.mode-tab').forEach(btn => {
+  btn.onclick = () => setMode(btn.dataset.mode);
+});
 
 searchEl.addEventListener('input', render);
 render();
